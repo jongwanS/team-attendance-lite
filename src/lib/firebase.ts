@@ -1,5 +1,5 @@
 // Firebase 설정 - 현재 사용하지 않음
-/*
+
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
@@ -23,9 +23,8 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 
 export default app;
-*/
 
 // 임시 더미 객체들
-export const auth = null;
-export const db = null;
-export default null; 
+//export const auth = null;
+//export const db = null;
+//export default null; 

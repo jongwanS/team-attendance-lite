@@ -1,11 +1,51 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { formatDate, getDaysInMonth, getWeekDates } from '@/lib/utils';
 import { CalendarEvent, LeaveRequest, LeaveType } from '@/types';
+
+function UsersList() {
+  const [items, setItems] = useState<any[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(true)
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const res = await fetch('/api/users')
+        if (!res.ok) throw new Error('failed')
+        const data = await res.json()
+        setItems(data.users || [])
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoadingUsers(false)
+      }
+    }
+    run()
+  }, [])
+
+  if (loadingUsers) return <p>유저 불러오는 중...</p>
+  if (items.length === 0) return <p>유저가 없습니다.</p>
+
+  return (
+    <div>
+      <div className="font-medium mb-1">유저 리스트</div>
+      <ul className="list-disc pl-5 space-y-1">
+        {items.map((u) => (
+          <li key={u.id}>
+            <span className="font-semibold">{u.userName || u.name}</span>
+            {u.leaveType ? (
+              <span className="text-gray-600"> — {u.leaveType}{u.isHalfDay ? ' (반차)' : ''}</span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 
 export default function HomePage() {
   const { user, loading, signInWithGoogle, logout } = useAuth();
@@ -371,6 +411,9 @@ export default function HomePage() {
               <h3 className="text-sm font-medium text-blue-800">데모 모드</h3>
               <div className="mt-2 text-sm text-blue-700">
                 <p>현재 Firebase 연동 없이 더미 데이터로 작동 중입니다. 실제 사용을 위해서는 Firebase 설정이 필요합니다.</p>
+                <div className="mt-3">
+                  <UsersList />
+                </div>
               </div>
             </div>
           </div>
