@@ -4,30 +4,35 @@ import { collection, addDoc, getDocs, query as fsQuery, where } from 'firebase/f
 
 export const runtime = 'nodejs'
 
-// GET /api/schedules  → 전체 조회
 export async function GET(req: NextRequest) {
   try {
-    const userName = req.nextUrl.searchParams.get('userName')?.trim()
-    const startStr = req.nextUrl.searchParams.get('start')?.trim()
-    const endStr = req.nextUrl.searchParams.get('end')?.trim()
-
+    const scheduleId = req.nextUrl.searchParams.get('scheduleId')?.trim()
+    const partnerId = req.nextUrl.searchParams.get('partnerId')?.trim()
+    const userId = req.nextUrl.searchParams.get('userId')?.trim()
+    const type = req.nextUrl.searchParams.get('type')?.trim()
+    const startDate = req.nextUrl.searchParams.get('startDate')?.trim()
+    const endDate = req.nextUrl.searchParams.get('endDate')?.trim()
+    
     const colRef = collection(db, 'schedules')
     const filters: any[] = []
 
-    if (userName && userName.length > 0) {
-      filters.push(where('userName', '==', userName))
+    if (scheduleId && scheduleId.length > 0) {
+      filters.push(where('scheduleId', '==', scheduleId))
     }
-    if (startStr) {
-      const startDate = new Date(startStr)
-      if (!isNaN(startDate.getTime())) {
-        filters.push(where('startDate', '>=', startDate))
-      }
+    if (partnerId && partnerId.length > 0) {
+      filters.push(where('partnerId', '==', partnerId))
     }
-    if (endStr) {
-      const endDate = new Date(endStr)
-      if (!isNaN(endDate.getTime())) {
-        filters.push(where('startDate', '<=', endDate))
-      }
+    if (userId && userId.length > 0) {
+      filters.push(where('userId', '==', userId))
+    }
+    if (type && type.length > 0) {
+      filters.push(where('type', '==', type))
+    }
+    if (startDate) {
+      filters.push(where('startDateTime', '>=', startDate))
+    }
+    if (endDate) {
+      filters.push(where('endDateTime', '<=', endDate))
     }
 
     let snap
@@ -40,46 +45,45 @@ export async function GET(req: NextRequest) {
     const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     return NextResponse.json({ items })
   } catch (error) {
+    console.error('[GET /api/schedules] error:', error)
     return NextResponse.json({ error: 'Failed to fetch schedules', detail: String(error) }, { status: 500 })
   }
 }
 
-// POST /api/schedules  → page.tsx 예시 형태로 저장
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const {
+      scheduleId,
+      partnerId,
       userId,
-      userName,
-      type, // 'annual' | 'half_morning' | 'half_afternoon' | 'sick' | ...
-      startDate,
-      endDate,
-      reason,
-      status, // 'pending' | 'approved' | 'rejected'
+      title,
+      description,
+      startDateTime,
+      endDateTime,
+      type,
     } = body || {}
 
-    if (!userId || !userName || !type || !startDate || !endDate || !status) {
+    if (!scheduleId || !partnerId || !userId || !title || !startDateTime || !endDateTime || !type) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const now = new Date()
     const payload = {
+      scheduleId,
+      partnerId,
       userId,
-      userName,
+      title,
+      description: description || '',
+      startDateTime: new Date(startDateTime),
+      endDateTime: new Date(endDateTime),
       type,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-      reason: reason ?? '',
-      status,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: new Date(),
     }
 
     const ref = await addDoc(collection(db, 'schedules'), payload)
     return NextResponse.json({ id: ref.id }, { status: 201 })
   } catch (error) {
+    console.error('[POST /api/schedules] error:', error)
     return NextResponse.json({ error: 'Failed to add schedule', detail: String(error) }, { status: 500 })
   }
 }
-
-

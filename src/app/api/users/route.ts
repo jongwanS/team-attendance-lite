@@ -30,24 +30,28 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       userId,
-      userName,
-      type, // e.g., 'leave'
-      date, // string | Date
-      leaveType, // 'annual' | 'half_morning' | 'half_afternoon' | 'sick' | ...
-      isHalfDay,
+      partnerId,
+      name,
+      email,
+      phone,
+      role,
+      hireDate,
+      status,
     } = body || {}
 
-    if (!userId || !userName || !type || !date || !leaveType || typeof isHalfDay !== 'boolean') {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+    if (!userId || !name || !email || !role) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
     const payload = {
       userId,
-      userName,
-      type,
-      date: new Date(date),
-      leaveType,
-      isHalfDay,
+      partnerId: partnerId || null,
+      name,
+      email,
+      phone: phone || '',
+      role,
+      hireDate: hireDate || null,
+      status: status || 'ACTIVE',
       createdAt: new Date(),
     }
 
