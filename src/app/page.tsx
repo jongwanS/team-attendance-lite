@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -12,64 +12,131 @@ export default function HomePage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [calendarView, setCalendarView] = useState<'month' | 'week'>('month');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(true);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
 
-  // 더미 데이터 (Firebase 연동 전까지 사용)
-  const mockEvents: CalendarEvent[] = [
-    {
-      id: '1',
-      type: 'leave',
-      date: new Date(2024, 11, 15),
-      userId: 'user1',
-      userName: '김철수',
-      leaveType: 'annual',
-      isHalfDay: false,
-    },
-    {
-      id: '2',
-      type: 'leave',
-      date: new Date(2024, 11, 20),
-      userId: 'user2',
-      userName: '이영희',
-      leaveType: 'half_morning',
-      isHalfDay: true,
-    },
-    {
-      id: '3',
-      type: 'leave',
-      date: new Date(2024, 11, 25),
-      userId: 'user3',
-      userName: '박민수',
-      leaveType: 'sick',
-      isHalfDay: false,
-    },
-  ];
+  // Firebase에서 스케줄 데이터 가져오기
+  useEffect(() => {
+    const fetchSchedules = async () => {
+      try {
+        const res = await fetch('/api/schedules');
+        if (!res.ok) throw new Error('Failed to fetch schedules');
+        const data = await res.json();
+        
+        if (data.items && data.items.length > 0) {
+          setSchedules(data.items);
+        } else {
+          // 스케줄이 없으면 샘플 데이터 생성
+          await createSampleSchedules();
+        }
+      } catch (error) {
+        console.error('Failed to load schedules:', error);
+        // 에러 시에도 샘플 데이터 생성
+        await createSampleSchedules();
+      } finally {
+        setLoadingSchedules(false);
+      }
+    };
 
-  const mockLeaveRequests: LeaveRequest[] = [
-    {
-      id: '1',
-      userId: 'user1',
-      userName: '김철수',
-      type: 'annual',
-      startDate: new Date(2024, 11, 15),
-      endDate: new Date(2024, 11, 15),
-      reason: '개인 휴가',
-      status: 'pending',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    {
-      id: '2',
-      userId: 'user2',
-      userName: '이영희',
-      type: 'half_morning',
-      startDate: new Date(2024, 11, 20),
-      endDate: new Date(2024, 11, 20),
-      reason: '병원 진료',
-      status: 'pending',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-  ];
+    const createSampleSchedules = async () => {
+      const sampleSchedules = [
+        {
+          scheduleId: 'sc_sample_001',
+          partnerId: 'p_001',
+          userId: 'u_001',
+          title: '팀 미팅',
+          description: '주간 팀 미팅',
+          startDateTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 내일
+          endDateTime: new Date(Date.now() + 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(), // 내일 + 1시간
+          type: 'MEETING'
+        },
+        {
+          scheduleId: 'sc_sample_002',
+          partnerId: 'p_001',
+          userId: 'u_001',
+          title: '프로젝트 리뷰',
+          description: '프로젝트 진행 상황 리뷰',
+          startDateTime: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 모레
+          endDateTime: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000).toISOString(), // 모레 + 2시간
+          type: 'PROJECT'
+        }
+      ];
+
+      try {
+        for (const schedule of sampleSchedules) {
+          await fetch('/api/schedules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(schedule)
+          });
+        }
+        
+        // 생성 후 다시 조회
+        const res = await fetch('/api/schedules');
+        if (res.ok) {
+          const data = await res.json();
+          setSchedules(data.items || []);
+        }
+      } catch (error) {
+        console.error('Failed to create sample schedules:', error);
+      }
+    };
+
+    if (user) {
+      fetchSchedules();
+    }
+  }, [user]);
+
+  // Firebase에서 이벤트와 휴가 신청 데이터 가져오기
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // 이벤트 데이터 가져오기 (leaves API 사용)
+        const leavesRes = await fetch('/api/leaves');
+        if (leavesRes.ok) {
+          const leavesData = await leavesRes.json();
+          const eventsData = leavesData.items?.map((leave: any) => ({
+            id: leave.id,
+            type: 'leave',
+            date: new Date(leave.startDate),
+            userId: leave.userId,
+            userName: leave.userId, // 실제로는 사용자 이름을 가져와야 함
+            leaveType: leave.leaveType,
+            isHalfDay: leave.leaveType.includes('HALF'),
+          })) || [];
+          setEvents(eventsData);
+        }
+
+        // 휴가 신청 데이터 가져오기
+        const requestsRes = await fetch('/api/leaves?status=PENDING');
+        if (requestsRes.ok) {
+          const requestsData = await requestsRes.json();
+          const requests = requestsData.items?.map((leave: any) => ({
+            id: leave.id,
+            userId: leave.userId,
+            userName: leave.userId, // 실제로는 사용자 이름을 가져와야 함
+            type: leave.leaveType,
+            startDate: new Date(leave.startDate),
+            endDate: new Date(leave.endDate),
+            reason: leave.reason,
+            status: leave.status,
+            createdAt: new Date(leave.appliedAt),
+            updatedAt: new Date(leave.appliedAt),
+          })) || [];
+          setLeaveRequests(requests);
+        }
+      } catch (error) {
+        console.error('Failed to load data:', error);
+      }
+    };
+
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
+
 
   if (loading) {
     return (
@@ -115,7 +182,25 @@ export default function HomePage() {
   };
 
   const getEventsForDate = (date: Date) => {
-    return mockEvents.filter(event => 
+    // Firebase 스케줄 데이터를 캘린더 이벤트로 변환
+    const scheduleEvents = schedules.map(schedule => {
+      const startDate = new Date(schedule.startDateTime.seconds * 1000);
+      return {
+        id: schedule.id,
+        type: 'schedule',
+        date: startDate,
+        userId: schedule.userId,
+        userName: schedule.title,
+        leaveType: schedule.type,
+        isHalfDay: false,
+        description: schedule.description
+      };
+    });
+
+    // Firebase 이벤트와 스케줄 합치기
+    const allEvents = [...events, ...scheduleEvents];
+    
+    return allEvents.filter(event => 
       event.date.toDateString() === date.toDateString()
     );
   };
@@ -216,7 +301,12 @@ export default function HomePage() {
 
         {/* 캘린더 */}
         <div className="bg-white rounded-lg shadow p-6">
-          {calendarView === 'month' ? (
+          {loadingSchedules ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <span className="ml-2 text-gray-600">스케줄 로딩 중...</span>
+            </div>
+          ) : calendarView === 'month' ? (
             <div className="grid grid-cols-7 gap-1">
               {/* 요일 헤더 */}
               {['일', '월', '화', '수', '목', '금', '토'].map((day) => (
@@ -251,12 +341,23 @@ export default function HomePage() {
                         className={`text-xs p-1 rounded mb-1 ${
                           event.type === 'leave' 
                             ? 'bg-green-100 text-green-800' 
+                            : event.type === 'schedule'
+                            ? 'bg-purple-100 text-purple-800'
                             : 'bg-blue-100 text-blue-800'
                         }`}
                       >
-                        {event.userName} {event.leaveType === 'half_morning' ? '오전반차' : 
-                                        event.leaveType === 'half_afternoon' ? '오후반차' : 
-                                        event.leaveType === 'sick' ? '병가' : '휴가'}
+                        {event.type === 'schedule' ? (
+                          <div>
+                            <div className="font-medium">{event.userName}</div>
+                            <div className="text-xs opacity-75">{event.leaveType}</div>
+                          </div>
+                        ) : (
+                          <div>
+                            {event.userName} {event.leaveType === 'half_morning' ? '오전반차' : 
+                                            event.leaveType === 'half_afternoon' ? '오후반차' : 
+                                            event.leaveType === 'sick' ? '병가' : '휴가'}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -294,15 +395,27 @@ export default function HomePage() {
             
             <div className="space-y-4">
               <div>
-                <h4 className="font-medium text-gray-700 mb-2">이 날의 휴가 신청</h4>
+                <h4 className="font-medium text-gray-700 mb-2">이 날의 일정</h4>
                 {getEventsForDate(selectedDate).length > 0 ? (
                   <div className="space-y-2">
                     {getEventsForDate(selectedDate).map((event) => (
-                      <div key={event.id} className="p-3 bg-gray-50 rounded-lg">
+                      <div key={event.id} className={`p-3 rounded-lg ${
+                        event.type === 'schedule' ? 'bg-purple-50 border border-purple-200' : 'bg-gray-50'
+                      }`}>
                         <div className="flex items-center justify-between">
-                          <span className="font-medium">{event.userName}</span>
-                          <span className="text-sm text-gray-500">
-                            {event.leaveType === 'annual' ? '연차' :
+                          <div>
+                            <span className="font-medium">{event.userName}</span>
+                            {'description' in event && event.description && (
+                              <p className="text-sm text-gray-600 mt-1">{event.description}</p>
+                            )}
+                          </div>
+                          <span className={`text-sm px-2 py-1 rounded ${
+                            event.type === 'schedule' 
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'text-gray-500'
+                          }`}>
+                            {event.type === 'schedule' ? event.leaveType :
+                             event.leaveType === 'annual' ? '연차' :
                              event.leaveType === 'half_morning' ? '오전 반차' :
                              event.leaveType === 'half_afternoon' ? '오후 반차' :
                              event.leaveType === 'sick' ? '병가' : '기타'}
@@ -312,7 +425,7 @@ export default function HomePage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-gray-500">휴가 신청이 없습니다.</p>
+                  <p className="text-gray-500">일정이 없습니다.</p>
                 )}
               </div>
               
@@ -331,9 +444,9 @@ export default function HomePage() {
         {user.role === 'manager' && (
           <div className="mt-8 bg-white rounded-lg shadow p-6">
             <h3 className="text-lg font-semibold mb-4">승인 대기 건</h3>
-            {mockLeaveRequests.length > 0 ? (
+            {leaveRequests.length > 0 ? (
               <div className="space-y-3">
-                {mockLeaveRequests.map((request) => (
+                {leaveRequests.map((request) => (
                   <div key={request.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div>
                       <div className="font-medium">{request.userName}</div>
